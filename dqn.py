@@ -2,18 +2,17 @@ import gym
 import random
 
 from itertools import count
-import time
 import torch
 import torch.nn as nn
+from utils import run
 import numpy as np
 
 from collections import deque
 
 
-
-class DQN(nn.Module): 
+class DQNNet(nn.Module): 
   def __init__(self, num_states, num_actions):
-    super(DQN, self).__init__()
+    super(DQNNet, self).__init__()
     self.net = torch.nn.Sequential(
       torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
       torch.nn.Linear(128, 128), torch.nn.ReLU(),
@@ -23,10 +22,9 @@ class DQN(nn.Module):
   def forward(self, s):
     return self.net(s)
 
-class CartPole(): 
-  def __init__(self, device):
-    self.env = gym.make("CartPole-v1")
-
+class DQN(): 
+  def __init__(self, env, device):
+    self.env = env
     num_states = self.env.observation_space.shape[0]
     num_actions = self.env.action_space.n
 
@@ -45,8 +43,8 @@ class CartPole():
 
     # Initialize target model and Q model
     # Initially they should be identical
-    self.Q_model = DQN(num_states, num_actions).to(device)
-    self.target = DQN(num_states, num_actions).to(device)
+    self.Q_model = DQNNet(num_states, num_actions).to(device)
+    self.target = DQNNet(num_states, num_actions).to(device)
     self.target.load_state_dict(self.Q_model.state_dict())
 
     self.optim = torch.optim.AdamW(self.Q_model.parameters(), self.lr, amsgrad=True)
@@ -101,7 +99,7 @@ class CartPole():
     torch.nn.utils.clip_grad_value_(self.Q_model.parameters(), 100)
     self.optim.step()
     
-  def train_cartpole(self, num_episodes):
+  def train_DQN(self, num_episodes):
     episode_lens = []
     for episode in range(num_episodes):
       if episode % 10 == 0: 
@@ -145,20 +143,6 @@ class CartPole():
         if done:
           episode_lens.append(t)
           break
-  def run(self):
-    state = self.env.reset()
-    done = False
-    while not done:
-      state = torch.tensor(state, device=self.device)
-      with torch.no_grad():
-        action = torch.argmax(self.Q_model(state))
-      state, _, terminated, truncated = self.env.step(action.item())
-      done = terminated or truncated
-      if not done:
-        self.env.render()
-      time.sleep(0.01)
-
-    self.env.close()
 
   def save(self):
     torch.save(self.Q_model.state_dict(), './data/save')
@@ -166,17 +150,18 @@ class CartPole():
   def load(self):
     self.Q_model.load_state_dict(torch.load('./data/save'))
 
-def train_and_save():
+def train_and_save(env):
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-  sim = CartPole(device)
-  sim.train_cartpole(400)
+  sim = DQN(env, device)
+  sim.train_DQN(400)
   sim.save()
 
-def load_and_run():
+def load_and_run(env):
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-  sim = CartPole(device)
+  sim = DQN(env, device)
   sim.load()
-  sim.run()
+  run(sim.Q_model)
 
 if __name__ == "__main__":
-  train_and_save()
+  env = gym.make("CartPole-v1")
+  train_and_save(env)
