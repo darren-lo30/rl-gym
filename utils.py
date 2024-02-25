@@ -1,6 +1,7 @@
 import torch
 import time
 import gym
+import matplotlib.pyplot as plt
 
 def get_device():
   return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -22,3 +23,9 @@ def run(model):
     time.sleep(0.01)
 
   env.close()
+
+def vis_episodes(episode_lens, save_file):
+  plt.plot(episode_lens)
+  plt.ylabel('Episode length')
+  plt.xlabel('Episode number')
+  plt.savefig(save_file)
