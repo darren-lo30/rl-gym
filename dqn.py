@@ -99,7 +99,7 @@ class DQN():
     torch.nn.utils.clip_grad_value_(self.Q_model.parameters(), 100)
     self.optim.step()
     
-  def train_DQN(self, num_episodes):
+  def train(self, num_episodes):
     episode_lens = []
     for episode in range(num_episodes):
       if episode % 10 == 0: 
@@ -153,7 +153,7 @@ class DQN():
 def train_and_save(env):
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
   sim = DQN(env, device)
-  sim.train_DQN(400)
+  sim.train(400)
   sim.save()
 
 def load_and_run(env):
