@@ -40,26 +40,36 @@ class ReinforceBaseline():
     num_actions = self.env.action_space.n
   
     # Hyperparameters
-    lr = 1e-4
+    policy_lr = 1e-4
+    baseline_lr = 1e-3
     self.gamma = 0.99
 
     # Policy model
     self.policy_net = PolicyNet(num_states, num_actions).to(device=device)
     self.baseline_net = BaselineNet(num_states).to(device=device)
-    self.optim = torch.optim.AdamW(self.policy_net.parameters(), lr=lr, amsgrad=True)
+    self.policy_optim = torch.optim.AdamW(self.policy_net.parameters(), lr=policy_lr, amsgrad=True)
+    self.baseline_optim = torch.optim.AdamW(self.baseline_net.parameters(), lr=baseline_lr, amsgrad=True)
 
   def policy_update(self, p_actions, G, baselines):
+    # Update baseline
+    sv_loss = torch.nn.functional.mse_loss(G, baselines)
+    self.baseline_optim.zero_grad()
+    sv_loss.backward()
+
+    self.baseline_optim.step()
+
+    # Update policy
     # We want to maximize the P * R, so minimize -P * R
-    rewards = (G - baselines)
+    rewards = (G - baselines.detach())
     rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-9)
     action_grad = -torch.log(p_actions) * rewards
     action_grad = action_grad.sum()
     
-    self.optim.zero_grad()
+    self.policy_optim.zero_grad()
     action_grad.backward()
     # nn.utils.clip_grad_norm_(self.policy_net.parameters(), 40)
 
-    self.optim.step()
+    self.policy_optim.step()
     
 
   def sample_action(self, state):
@@ -119,5 +129,5 @@ if __name__ == "__main__":
   env = gym.make("CartPole-v1")
   # Reinforce with baseline lossole-v1")
   r = ReinforceBaseline(env, device)
-  episode_lens = r.train(2000)
+  episode_lens = r.train(600)
   vis_episodes(episode_lens, './data/reinforce_baseline')
