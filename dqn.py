@@ -1,12 +1,13 @@
 import gym
+import copy
 import random
 
 from itertools import count
 import torch
 import torch.nn as nn
-from utils import run
+from utils import *
 import numpy as np
-
+from agent import *
 from collections import deque
 
 
@@ -22,11 +23,9 @@ class DQNNet(nn.Module):
   def forward(self, s):
     return self.net(s)
 
-class DQN(): 
-  def __init__(self, env, device):
+class DQN(Agent): 
+  def __init__(self, env, device, Q_model):
     self.env = env
-    num_states = self.env.observation_space.shape[0]
-    num_actions = self.env.action_space.n
 
     # Hyperparameters
     self.eps_start = 0.9
@@ -43,8 +42,8 @@ class DQN():
 
     # Initialize target model and Q model
     # Initially they should be identical
-    self.Q_model = DQNNet(num_states, num_actions).to(device)
-    self.target = DQNNet(num_states, num_actions).to(device)
+    self.Q_model = Q_model.to(device)
+    self.target = copy.deepcopy(self.Q_model).to(device)
     self.target.load_state_dict(self.Q_model.state_dict())
 
     self.optim = torch.optim.AdamW(self.Q_model.parameters(), self.lr, amsgrad=True)
@@ -55,6 +54,9 @@ class DQN():
 
   def get_eps(self):
     return self.eps_end + (self.eps_start - self.eps_end) * np.exp(-1 * self.num_action / self.eps_decay)
+
+  def act(self, state):
+    return self.Q_model(state).argmax(dim = 1)
 
   def get_action(self, state):
     self.num_action += 1
@@ -145,23 +147,17 @@ class DQN():
           break
 
   def save(self):
-    torch.save(self.Q_model.state_dict(), './data/save')
+    torch.save(self.Q_model.state_dict(), './data/dqn')
   
   def load(self):
-    self.Q_model.load_state_dict(torch.load('./data/save'))
+    self.Q_model.load_state_dict(torch.load('./data/dqn'))
 
-def train_and_save(env):
-  device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-  sim = DQN(env, device)
-  sim.train(400)
-  sim.save()
-
-def load_and_run(env):
-  device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-  sim = DQN(env, device)
-  sim.load()
-  run(sim.Q_model)
 
 if __name__ == "__main__":
   env = gym.make("CartPole-v1")
-  train_and_save(env)
+  num_states, num_actions = get_num_states_actions_discrete(env)
+
+  Q_model = DQNNet(num_states, num_actions)
+  agent = DQN(env, get_device(), Q_model)
+
+  train_save_run(agent, 1000)

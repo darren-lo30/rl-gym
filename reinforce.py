@@ -1,9 +1,10 @@
 import torch
 from torch import nn
 import gym
-from utils import get_device
+from utils import *
 from itertools import count
 import numpy as np
+import agent
 
 class ReinforceNet(nn.Module): 
   def __init__(self, num_states, num_actions):
@@ -18,20 +19,16 @@ class ReinforceNet(nn.Module):
   def forward(self, s):
     return self.net(s)
 
-
-class Reinforce():
-  def __init__(self, env, device):
-    self.env = env
-    self.device = device
-    num_states = self.env.observation_space.shape[0]
-    num_actions = self.env.action_space.n
+class Reinforce(agent.Agent):
+  def __init__(self, env, device, policy_net):
+    super().__init__(env, device)
   
     # Hyperparameters
     lr = 1e-4
     self.gamma = 0.99
 
     # Policy model
-    self.policy_net = ReinforceNet(num_states, num_actions).to(device=device)
+    self.policy_net = policy_net.to(device)
     self.optim = torch.optim.AdamW(self.policy_net.parameters(), lr=lr, amsgrad=True)
 
   def policy_update(self, p_actions, G):
@@ -44,13 +41,16 @@ class Reinforce():
     # nn.utils.clip_grad_norm_(self.policy_net.parameters(), 40)
 
     self.optim.step()
-    
 
   def sample_action(self, state):
     p_actions = self.policy_net(state)
     choice = torch.multinomial(p_actions, 1, replacement=True)
     p_action = p_actions[choice.item()].reshape(1)
     return p_action, choice
+  
+  def act(self, state):
+    _, action = self.sample_action(state)
+    return action
   
   def compute_G(self, rewards):
     pows = torch.pow(self.gamma, torch.arange(0, rewards.shape[0], device=self.device))
@@ -88,10 +88,17 @@ class Reinforce():
       if episode % 10 == 0:
         print(f"Simulating episode {episode}. Lasted on average {np.mean(episode_lens[-10:])}")
 
+  def save(self):
+    torch.save(self.policy_net.state_dict(), './data/reinforce')
+  
+  def load(self):
+    self.policy_net.load_state_dict(torch.load('./data/reinforce'))
 
     
 if __name__ == "__main__":
-  device = get_device()
   env = gym.make("CartPole-v1")
-  r = Reinforce(env, device)
-  r.train(5000)
+  num_states, num_actions = get_num_states_actions_discrete(env)
+  net = ReinforceNet(num_states, num_actions)
+  device = get_device()
+  r = Reinforce(env, device, net)
+  agent.load_and_run(r)
