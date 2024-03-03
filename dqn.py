@@ -56,7 +56,7 @@ class DQN(Agent):
     return self.eps_end + (self.eps_start - self.eps_end) * np.exp(-1 * self.num_action / self.eps_decay)
 
   def act(self, state):
-    return self.Q_model(state).argmax(dim = 1)
+    return self.Q_model(state).argmax(dim = 1).item()
 
   def get_action(self, state):
     self.num_action += 1

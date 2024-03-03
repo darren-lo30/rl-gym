@@ -50,7 +50,7 @@ class Reinforce(agent.Agent):
   
   def act(self, state):
     _, action = self.sample_action(state)
-    return action
+    return action.item()
   
   def compute_G(self, rewards):
     pows = torch.pow(self.gamma, torch.arange(0, rewards.shape[0], device=self.device))

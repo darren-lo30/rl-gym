@@ -72,7 +72,7 @@ class ActorCritic():
 
   def act(self, state):
     _, action = self.sample_action(state)
-    return action
+    return action.item()
   
   def compute_advantage(self, state, next_state, reward):
     v_curr = self.critic_net(state)
@@ -103,10 +103,6 @@ class ActorCritic():
         if next_state is not None:
           next_state = torch.tensor(next_state, device=self.device)
         reward = torch.tensor(reward, device=self.device)
-
-      def act(self, state):
-        _, action = self.sample_action(state)
-        return action
 
         p_actions.append(p_action)
         advantage, loss = self.compute_advantage(state, next_state, reward)
