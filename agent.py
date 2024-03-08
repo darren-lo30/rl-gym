@@ -10,7 +10,7 @@ class Agent():
     self.device = device
   
   # Train the agent simulating num_episodes
-  def train(self, num_episodes):
+  def train(self):
     raise NotImplementedError()
 
   # Get the optimal action at a state
@@ -25,6 +25,18 @@ class Agent():
   # Load the agent's model from a file
   def load(self):
     raise NotImplementedError()
+  
+  def env_step(self, action):
+    if torch.is_tensor(action):
+      action = action.item()
+
+    next_state, reward, terminated, truncated = self.env.step(action)
+    if next_state is not None:
+      next_state = torch.tensor(next_state, device=self.device)
+    reward = torch.tensor(reward, device=self.device).reshape(1)
+
+    return next_state, reward, terminated, truncated
+
 
 # Simulate the agent in the environment
 def run(agent):
@@ -44,8 +56,8 @@ def run(agent):
   env.close()
 
 # Train, save then run an agent
-def train_save_run(agent, num_episodes=1000):
-  hist = agent.train(num_episodes)
+def train_save_run(agent):
+  hist = agent.train()
   agent.save()
   run(agent)
   return hist

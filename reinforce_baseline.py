@@ -35,15 +35,15 @@ class BaselineNet(nn.Module):
 # Reinforce with baseline loss
 class ReinforceBaseline(Agent):
   def __init__(self, env, device, policy_net, baseline_net, save_file = './data/reinforce_baseline'):
-    self.env = env
-    self.device = device
+    super().__init__(env, device)
     self.save_file = save_file
   
     # Hyperparameters
-    policy_lr = 1e-2
-    baseline_lr = 1e-2
+    policy_lr = 1e-4
+    baseline_lr = 1e-4
     self.gamma = 0.99
-
+    self.num_episodes = 1000
+    
     # Policy model
     self.policy_net = policy_net.to(device=device)
     self.baseline_net = baseline_net.to(device=device)
@@ -87,9 +87,9 @@ class ReinforceBaseline(Agent):
     G = torch.flip(torch.cumsum(torch.flip(rewards * pows, dims = [0]), dim = 0), dims = [0]) / pows
     return G
 
-  def train(self, num_episodes):
+  def train(self):
     episode_lens = []
-    for episode in range(num_episodes):
+    for episode in range(self.num_episodes):
       state = self.env.reset()
       state = torch.tensor(state, device=self.device)
         
@@ -100,7 +100,7 @@ class ReinforceBaseline(Agent):
       # Collect data
       for t in count():
         p_action, action = self.sample_action(state)
-        next_state, reward, terminated, truncated = self.env.step(action.item())
+        next_state, reward, terminated, truncated = self.env_step(action.item())
         rewards.append(reward)
         p_actions.append(p_action)
 
@@ -109,11 +109,11 @@ class ReinforceBaseline(Agent):
 
         done = terminated or truncated
         if not done:
-          state = torch.tensor(next_state, device=self.device)
+          state = next_state
         else:
           episode_lens.append(t)
           break
-      rewards = torch.tensor(rewards, device=self.device)
+      rewards = torch.cat(rewards)
       p_actions = torch.cat(p_actions)
       baselines = torch.cat(baselines)
       G = self.compute_G(rewards)
@@ -147,5 +147,5 @@ if __name__ == "__main__":
   baseline_net = BaselineNet(num_states)
 
   r = ReinforceBaseline(env, device, policy_net, baseline_net, save_file='./data/reinforce_baseline_acrobot')
-  episode_lens = train_save_run(r, 1000)
+  episode_lens = train_save_run(r)
   vis_episodes(episode_lens, './data/reinforce_baseline_acrobot')

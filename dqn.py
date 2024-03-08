@@ -37,6 +37,7 @@ class DQN(Agent):
     self.gamma = 0.99
     self.replay_memory = deque(maxlen=10_000)
     self.lr = 1e-4
+    self.num_episodes = 1000
 
     self.num_action = 0
 
@@ -101,9 +102,9 @@ class DQN(Agent):
     torch.nn.utils.clip_grad_value_(self.Q_model.parameters(), 100)
     self.optim.step()
     
-  def train(self, num_episodes):
+  def train(self):
     episode_lens = []
-    for episode in range(num_episodes):
+    for episode in range(self.num_episodes):
       if episode % 10 == 0: 
         print(f"Training episode {episode}")
         print(f"Episode takes on average {np.mean(episode_lens[-10:])} steps")
@@ -160,4 +161,4 @@ if __name__ == "__main__":
   Q_model = DQNNet(num_states, num_actions)
   agent = DQN(env, get_device(), Q_model)
 
-  train_save_run(agent, 1000)
+  train_save_run(agent)

@@ -1,6 +1,5 @@
 import torch
-import time
-import gym
+from torch import nn
 import matplotlib.pyplot as plt
 
 def get_device():
@@ -23,3 +22,29 @@ def get_num_states_actions_continuous(env):
   num_actions = env.action_space.shape[0]
 
   return num_states, num_actions
+
+class PolicyNet(nn.Module): 
+  def __init__(self, num_states, num_actions):
+    super(PolicyNet, self).__init__()
+    self.net = torch.nn.Sequential(
+      torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
+      torch.nn.Linear(128, 128), torch.nn.ReLU(),
+      torch.nn.Linear(128, 128), torch.nn.ReLU(), 
+      torch.nn.Linear(128, num_actions), torch.nn.Softmax(dim=0)
+    )
+
+  def forward(self, s):
+    return self.net(s)
+
+class ValueNet(nn.Module):
+  def __init__(self, num_states):
+    super(ValueNet, self).__init__() 
+    self.net = torch.nn.Sequential(
+      torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
+      torch.nn.Linear(128, 128), torch.nn.ReLU(),
+      torch.nn.Linear(128, 128), torch.nn.ReLU(), 
+      torch.nn.Linear(128, 1)
+    )
+  
+  def forward(self, s):
+    return self.net(s)

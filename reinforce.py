@@ -26,6 +26,7 @@ class Reinforce(agent.Agent):
     # Hyperparameters
     lr = 1e-4
     self.gamma = 0.99
+    self.num_episodes = 1000
 
     # Policy model
     self.policy_net = policy_net.to(device)
@@ -57,9 +58,9 @@ class Reinforce(agent.Agent):
     G = torch.flip(torch.cumsum(torch.flip(rewards * pows, dims = [0]), dim = 0), dims = [0]) / pows
     return G
 
-  def train(self, num_episodes):
+  def train(self):
     episode_lens = []
-    for episode in range(num_episodes):
+    for episode in range(self.num_episodes):
       state = self.env.reset()
       state = torch.tensor(state, device=self.device)
         
@@ -69,17 +70,16 @@ class Reinforce(agent.Agent):
       # Collect data
       for t in count():
         p_action, action = self.sample_action(state)
-        next_state, reward, terminated, truncated = self.env.step(action.item())
+        next_state, reward, terminated, truncated = self.env_step(action.item())
         rewards.append(reward)
         p_actions.append(p_action)
 
         done = terminated or truncated
         if not done:
-          state = torch.tensor(next_state, device=self.device)
+          state = next_state
         else:
           episode_lens.append(t)
           break
-      rewards = torch.tensor(rewards, device=self.device)
       p_actions = torch.cat(p_actions)
       G = self.compute_G(rewards)
       # Update policy gradient  

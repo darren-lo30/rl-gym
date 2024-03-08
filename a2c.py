@@ -1,50 +1,28 @@
 import torch
 from torch import nn
 import gym
-from utils import get_device, vis_episodes
+from utils import *
+from agent import *
 from itertools import count
 import numpy as np
 
-class ActorNet(nn.Module): 
-  def __init__(self, num_states, num_actions):
-    super(ActorNet, self).__init__()
-    self.net = torch.nn.Sequential(
-      torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(), 
-      torch.nn.Linear(128, num_actions), torch.nn.Sigmoid(dim=0)
-    )
-
-  def forward(self, s):
-    return self.net(s)
-
-class CriticNet(nn.Module):
-  def __init__(self, num_states):
-    super(CriticNet, self).__init__() 
-    self.net = torch.nn.Sequential(
-      torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(), 
-      torch.nn.Linear(128, 1)
-    )
-  
-  def forward(self, s):
-    return self.net(s)
-
-class ActorCritic():
-  def __init__(self, env, device, actor_net, critic_net):
-    self.env = env
-    self.device = device  
+class ActorCritic(Agent):
+  def __init__(self, env, device, actor_net, critic_net, save_file = './data/a2c'):
+    super().__init__(env, device)
+    self.save_file = save_file
     # Hyperparameters
-    lr = 1e-3
+    actor_lr = 1e-4
+    critic_lr = 1e-4
 
     self.gamma = 0.99
+    self.num_episodes = 1000
 
     # Policy model
     self.actor_net = actor_net
     self.critic_net = critic_net
-    self.actor_optim = torch.optim.AdamW(self.actor_net.parameters(), lr=lr, amsgrad=True)
-    self.critic_optim = torch.optim.AdamW(self.critic_net.parameters(), lr=lr, amsgrad=True)
+    self.actor_optim = torch.optim.AdamW(self.actor_net.parameters(), lr=actor_lr, amsgrad=True)
+    self.critic_optim = torch.optim.AdamW(self.critic_net.parameters(), lr=critic_lr, amsgrad=True)
+    
 
   def policy_update(self, p_actions, advantages, advantages_loss):
     # Compute critic gradients
@@ -52,6 +30,7 @@ class ActorCritic():
     advantages_loss.sum().backward()
     self.critic_optim.step()
     
+    advantages = advantages.detach()
     # Compute actor gradients    
     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-9)
     action_grad = -torch.log(p_actions) * advantages
@@ -86,9 +65,9 @@ class ActorCritic():
     loss = torch.nn.functional.mse_loss(target, v_curr).view(1)
     return advantage.detach(), loss
 
-  def train(self, num_episodes):
+  def train(self):
     episode_lens = []
-    for episode in range(num_episodes):
+    for episode in range(self.num_episodes):
       state = self.env.reset()
       state = torch.tensor(state, device=self.device)
         
@@ -99,10 +78,7 @@ class ActorCritic():
       # Collect data
       for t in count():
         p_action, action = self.sample_action(state)
-        next_state, reward, terminated, truncated = self.env.step(action.item())
-        if next_state is not None:
-          next_state = torch.tensor(next_state, device=self.device)
-        reward = torch.tensor(reward, device=self.device)
+        next_state, reward, terminated, truncated = self.env_step(action.item())
 
         p_actions.append(p_action)
         advantage, loss = self.compute_advantage(state, next_state, reward)
@@ -125,12 +101,27 @@ class ActorCritic():
         print(f"Simulating episode {episode}. Lasted on average {np.mean(episode_lens[-10:])}")
     
     return episode_lens
+  
+  def save(self):
+    torch.save({
+      'actor': self.actor_net.state_dict(),
+      'critic': self.critic_net.state_dict()
+    }, self.save_file)
+
+  def load(self):
+    data = torch.load(self.save_file)
+    self.actor_net.load_state_dict(data['actor'])
+    self.critic_net.load_state_dict(data['critic'])
 
     
 if __name__ == "__main__":
-  
   device = get_device()
-  env = gym.make("BipedalWalker-v3")
-  r = ActorCritic(env, device)
-  episode_lens = r.train(3000)
+  env = gym.make("CartPole-v1")
+  # Reinforce with baseline loss
+  num_states, num_actions = get_num_states_actions_discrete(env)
+
+  actor_net = PolicyNet(num_states, num_actions).to(device=device)
+  critic_net = ValueNet(num_states).to(device=device)
+  r = ActorCritic(env, device, actor_net=actor_net, critic_net=critic_net)
+  episode_lens = train_save_run(r)
   vis_episodes(episode_lens, './data/a2c')
