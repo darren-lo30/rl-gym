@@ -41,7 +41,7 @@ class Agent():
 # Simulate the agent in the environment
 def run(agent):
   env = agent.env
-  state = env.reset()
+  state, _ = env.reset()
   done = False
   while not done:
     state = torch.tensor(state, device=get_device())

@@ -21,7 +21,8 @@ class PPOPolicyNet(nn.Module):
 
   def forward(self, s):
     p = self.net(s)
-    return torch.distributions.Categorical(p)
+    dist = torch.distributions.Categorical(p)
+    return dist
   
 class ExperienceDataset(Dataset):
   def __init__(self, buffer):
@@ -41,13 +42,13 @@ class PPO(Agent):
     self.save_file = save_file
 
     # Hyperparameters
-    lr = 0.0003
+    lr = 1e-4
     self.clip_epsilon = 0.2
     self.gamma = 0.99
     self.num_train_epochs = 300
-    self.num_optim_epochs = 5
+    self.num_optim_epochs = 20
     self.buffer_size = 128
-    self.batch_size = 16
+    self.batch_size = 32
     self.gae_lambda=0.95
     self.advantage_coef = 0.5
     self.entropy_coef = 0
@@ -62,8 +63,7 @@ class PPO(Agent):
   
   def get_p_actions(self, states, actions):
     dists = self.policy_net(states)
-    p_actions = dists.log_prob(actions.reshape(-1))
-    return p_actions
+    return dists.log_prob(actions)
     
   def act(self, state):
     _, action = self.sample_action(state)
@@ -90,7 +90,7 @@ class PPO(Agent):
 
         # probability under updated recent policy
         new_p_actions = self.get_p_actions(states, actions)
-        ratio = torch.exp(new_p_actions - p_actions)
+        ratio = new_p_actions.exp() / p_actions.exp()
 
         unclipped_objective = ratio * advantages
         clipped_ratio = torch.clip(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon) 
@@ -102,19 +102,18 @@ class PPO(Agent):
         new_values = self.value_net(states)
 
         value_loss = torch.nn.functional.mse_loss(new_values, returns, reduction='none')
-        entropy = -new_p_actions.exp() * new_p_actions
 
         loss = -actor_objective + self.advantage_coef * value_loss 
 
         self.optim.zero_grad()
-        nn.utils.clip_grad_norm_(self.policy_net.parameters(), 40)
-        nn.utils.clip_grad_norm_(self.value_net.parameters(), 40)
+        # nn.utils.clip_grad_norm_(self.policy_net.parameters(), 40)
+        # nn.utils.clip_grad_norm_(self.value_net.parameters(), 40)
         loss.mean().backward()
         self.optim.step()
       # self.scheduler.step()
   
   def compute_gae(self, states, rewards):
-    gae = [0 for i in range(len(rewards))]
+    gae = [0 for _ in range(len(rewards))]
     values = [self.value_net(state) for state in states]
     for t in range(len(rewards)-1):
       discount = 1
