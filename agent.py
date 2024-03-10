@@ -30,7 +30,7 @@ class Agent():
     if torch.is_tensor(action):
       action = action.item()
 
-    next_state, reward, terminated, truncated = self.env.step(action)
+    next_state, reward, terminated, truncated, _ = self.env.step(action)
     if next_state is not None:
       next_state = torch.tensor(next_state, device=self.device)
     reward = torch.tensor(reward, device=self.device).reshape(1)

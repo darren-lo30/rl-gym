@@ -135,11 +135,10 @@ class PPO(Agent):
     t = 0
 
     buffer = []
-
-    state = torch.tensor(self.env.reset(), device=self.device)
     while len(buffer) < self.buffer_size:
       done = False
-      state = torch.tensor(self.env.reset(), device=self.device)
+      state, _ = self.env.reset()
+      state = torch.tensor(state, device=self.device)
       t = 0
       
       states = []
