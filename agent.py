@@ -56,6 +56,12 @@ def run(agent):
   env.close()
 
 # Train, save then run an agent
+  
+def train_run(agent):
+  hist = agent.train()
+  run(agent)
+  return hist
+
 def train_save_run(agent):
   hist = agent.train()
   agent.save()

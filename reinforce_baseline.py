@@ -148,4 +148,4 @@ if __name__ == "__main__":
 
   r = ReinforceBaseline(env, device, policy_net, baseline_net, save_file='./data/reinforce_baseline_acrobot')
   episode_lens = train_save_run(r)
-  vis_episodes(episode_lens, './data/reinforce_baseline_acrobot')
+  vis_episodes(episode_lens, './data/reinforce_baseline')

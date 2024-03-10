@@ -54,6 +54,10 @@ class ActorCritic(Agent):
     return action.item()
   
   def compute_advantage(self, state, next_state, reward):
+    # Advantage = Q(s, a) - V(s)
+    # There are two ways to calculate Q(s, a)
+    # We either estimate it with our critic, this is not unbiased but has low variance
+    # Alternatively, we use our training expisode and calculat the discounted sum of rewards at each time step, unbiased but high variance
     v_curr = self.critic_net(state)
     if next_state is None:
       v_next = 0
