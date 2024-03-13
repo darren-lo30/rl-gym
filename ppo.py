@@ -15,24 +15,13 @@ class PPOPolicyNet(nn.Module):
     self.net = torch.nn.Sequential(
       torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
       torch.nn.Linear(128, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(), 
-      torch.nn.Linear(128, num_actions), torch.nn.Softmax(dim=0)
+      torch.nn.Linear(128, num_actions), torch.nn.Softmax(dim=-1)
     )
 
   def forward(self, s):
     p = self.net(s)
     dist = torch.distributions.Categorical(p)
     return dist
-  
-class ExperienceDataset(Dataset):
-  def __init__(self, buffer):
-    self.buffer = buffer
-
-  def __len__(self):
-    return len(self.buffer)
-  
-  def __getitem__(self, index):
-    return self.buffer[index]
 
 class PPO(Agent):
   def __init__(self, env, policy_net, value_net, device=get_device(), save_file='./data/ppo'):
@@ -42,17 +31,17 @@ class PPO(Agent):
     self.save_file = save_file
 
     # Hyperparameters
-    lr = 1e-4
+    lr = 0.0003
     self.clip_epsilon = 0.2
     self.gamma = 0.99
     self.num_train_epochs = 300
-    self.num_optim_epochs = 20
-    self.buffer_size = 128
-    self.batch_size = 32
-    self.gae_lambda=0.95
+    self.num_optim_epochs = 4
+    self.buffer_size = 1000
+    self.batch_size = 50
+    self.gae_lambda = 0.95
     self.advantage_coef = 0.5
     self.entropy_coef = 0
-    self.optim = torch.optim.AdamW(chain(policy_net.parameters(), value_net.parameters()), lr)
+    self.optim = torch.optim.Adam(chain(policy_net.parameters(), value_net.parameters()), lr)
     self.batch_episode_lens = []
 
   def sample_action(self, state):
@@ -81,12 +70,12 @@ class PPO(Agent):
     self.value_net.load_state_dict(data['value'])
   
   def optim_steps(self, buffer):
-    states_dataloader = torch.utils.data.DataLoader(ExperienceDataset(buffer), batch_size=self.batch_size, shuffle=True)
+    states_dataloader = torch.utils.data.DataLoader(buffer, batch_size=self.batch_size, shuffle=True)
     
     for _ in range(self.num_optim_epochs):
       for batch in states_dataloader:
         states, actions, p_actions, advantages, values = batch
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
+        # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
 
         # probability under updated recent policy
         new_p_actions = self.get_p_actions(states, actions)
@@ -98,38 +87,40 @@ class PPO(Agent):
         clipped_objective = clipped_ratio * advantages
 
         actor_objective = torch.min(unclipped_objective, clipped_objective)
-        returns = advantages + values 
+  
+        returns = advantages + torch.squeeze(values) 
         new_values = self.value_net(states)
 
-        value_loss = torch.nn.functional.mse_loss(new_values, returns, reduction='none')
+        value_loss = torch.nn.functional.mse_loss(torch.squeeze(new_values), returns, reduction='none')
 
         loss = -actor_objective + self.advantage_coef * value_loss 
 
         self.optim.zero_grad()
-        # nn.utils.clip_grad_norm_(self.policy_net.parameters(), 40)
-        # nn.utils.clip_grad_norm_(self.value_net.parameters(), 40)
+        nn.utils.clip_grad_norm_(self.policy_net.parameters(), 2)
+        nn.utils.clip_grad_norm_(self.value_net.parameters(), 2)
         loss.mean().backward()
         self.optim.step()
       # self.scheduler.step()
   
-  def compute_gae(self, states, rewards):
-    gae = [0 for _ in range(len(rewards))]
-    values = [self.value_net(state) for state in states]
+  def compute_gae(self, rewards, values, dones):
+    advantage = np.zeros(len(rewards), dtype=torch.float32)
+
+    for t in reversed(range(len(rewards))):
+           
     for t in range(len(rewards)-1):
       discount = 1
       a_t = 0
-      for k in range(t, len(rewards)-1):
-        a_t += discount*(rewards[k] + self.gamma * values[k+1] - values[k])
-        discount *= self.gamma*self.gae_lambda
-      gae[t] = a_t.detach()
-    gae[-1] = torch.tensor([0], device=self.device)
-    # returns = 0
-    # for (state, reward) in reversed(list(zip(states, rewards))):
-    #   returns = returns * self.gamma + reward
-    #   advantage = returns - self.value_net(state)
-    #   gae.append(advantage.detach())
+      for k in range(t, len(rewards)):
+        next_value = 0 if k+1 >= len(rewards) else values[k+1]
 
-    return gae
+        a_t += discount*(rewards[k] + self.gamma*next_value - values[k])
+        discount *= self.gamma*self.gae_lambda
+        if(dones[k]):
+          break
+      advantage[t] = a_t.detach()
+    advantage = torch.tensor(advantage).to(self.device)
+    return advantage
+
   def collect_buffer(self):
     t = 0
 
@@ -145,11 +136,13 @@ class PPO(Agent):
       rewards = []
       p_actions = []
       values = []
+      dones = []
 
       while not done:
         t += 1
         p_action, action = self.sample_action(state.reshape(-1))
         next_state, reward, terminated, truncated = self.env_step(action)
+        done = terminated or truncated
 
         value = self.value_net(state)
 
@@ -158,16 +151,16 @@ class PPO(Agent):
         rewards.append(reward)
         p_actions.append(p_action.detach())
         values.append(value.detach())
-
         done = terminated or truncated
+        dones.append(done)
         if not done:
           state = next_state
 
       self.batch_episode_lens.append(t)
-      advantages = self.compute_gae(states, rewards)
+      advantages = self.compute_gae(rewards, values, dones)
       buffer.extend(list(zip(states, actions, p_actions, advantages, values)))
 
-    return buffer[:self.batch_size] 
+    return buffer 
 
   def train(self):
     episode_lens = []
@@ -183,21 +176,21 @@ class PPO(Agent):
       episode_lens.append(mean_episode_len)
       print(f'Training epoch {epoch}. Lasted on average {mean_episode_len}')
 
-      if mean_episode_len > best_episode_len:
+      if mean_episode_len >= best_episode_len:
         best_episode_len = mean_episode_len
+        print("Saving model...")
         self.save()
 
       self.batch_episode_lens = []
-    
-    return episode_lens
+
       
 if __name__ == "__main__":
   device = get_device()
-  env = gym.make("CartPole-v1")
+  env = gym.make("CartPole-v1", render_mode=None)
   num_states, num_actions = get_num_states_actions_discrete(env)
 
   policy_net = PPOPolicyNet(num_states, num_actions).to(device=device)
   value_net = ValueNet(num_states).to(device=device)
   r = PPO(env, policy_net, value_net)
-  episode_lens = train_run(r)
-  vis_episodes(episode_lens, './data/ppo')
+  episode_lens = train_save_run(r)
+  # vis_episodes(episode_lens, './data/ppo')

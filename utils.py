@@ -41,7 +41,6 @@ class ValueNet(nn.Module):
     super(ValueNet, self).__init__() 
     self.net = torch.nn.Sequential(
       torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(),
       torch.nn.Linear(128, 128), torch.nn.ReLU(), 
       torch.nn.Linear(128, 1)
     )
