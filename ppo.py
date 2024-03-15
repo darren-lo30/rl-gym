@@ -102,24 +102,16 @@ class PPO(Agent):
         self.optim.step()
       # self.scheduler.step()
   
-  def compute_gae(self, rewards, values, dones):
-    advantage = np.zeros(len(rewards), dtype=torch.float32)
+  def compute_gae(self, rewards, values):
+    T = len(rewards)
+    advantages = torch.zeros(T + 1, dtype=torch.float32, device=self.device)
 
-    for t in reversed(range(len(rewards))):
-           
-    for t in range(len(rewards)-1):
-      discount = 1
-      a_t = 0
-      for k in range(t, len(rewards)):
-        next_value = 0 if k+1 >= len(rewards) else values[k+1]
-
-        a_t += discount*(rewards[k] + self.gamma*next_value - values[k])
-        discount *= self.gamma*self.gae_lambda
-        if(dones[k]):
-          break
-      advantage[t] = a_t.detach()
-    advantage = torch.tensor(advantage).to(self.device)
-    return advantage
+    for t in reversed(range(T)):
+      next_value = 0 if t + 1 >= T else values[t + 1]
+      delta_t = rewards[t] + self.gamma * next_value - values[t]
+      advantages[t] = delta_t + self.gae_lambda * self.gamma * advantages[t+1]
+      
+    return advantages
 
   def collect_buffer(self):
     t = 0
@@ -136,7 +128,6 @@ class PPO(Agent):
       rewards = []
       p_actions = []
       values = []
-      dones = []
 
       while not done:
         t += 1
@@ -152,12 +143,11 @@ class PPO(Agent):
         p_actions.append(p_action.detach())
         values.append(value.detach())
         done = terminated or truncated
-        dones.append(done)
         if not done:
           state = next_state
 
       self.batch_episode_lens.append(t)
-      advantages = self.compute_gae(rewards, values, dones)
+      advantages = self.compute_gae(rewards, values)
       buffer.extend(list(zip(states, actions, p_actions, advantages, values)))
 
     return buffer 
