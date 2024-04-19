@@ -27,7 +27,7 @@ class Agent():
     raise NotImplementedError()
   
   def env_step(self, action):
-    if torch.is_tensor(action):
+    if torch.is_tensor(action) and torch.squeeze(action).shape[0] == 1:
       action = action.item()
 
     next_state, reward, terminated, truncated, _ = self.env.step(action)
