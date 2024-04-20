@@ -1,7 +1,5 @@
 import torch
 from torch import nn
-import gym
-from utils import *
 from itertools import count
 import numpy as np
 import agent
@@ -88,17 +86,8 @@ class Reinforce(agent.Agent):
       if episode % 10 == 0:
         print(f"Simulating episode {episode}. Lasted on average {np.mean(episode_lens[-10:])}")
 
-  def save(self):
-    torch.save(self.policy_net.state_dict(), './data/reinforce')
+  def save(self, file):
+    torch.save(self.policy_net.state_dict(), file)
   
-  def load(self):
-    self.policy_net.load_state_dict(torch.load('./data/reinforce'))
-
-    
-if __name__ == "__main__":
-  env = gym.make("CartPole-v1")
-  num_states, num_actions = get_num_states_actions_discrete(env)
-  net = ReinforceNet(num_states, num_actions)
-  device = get_device()
-  r = Reinforce(env, device, net)
-  agent.load_and_run(r)
+  def load(self, file):
+    self.policy_net.load_state_dict(torch.load(file))

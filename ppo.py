@@ -1,11 +1,10 @@
 from itertools import chain
-import gym
 import numpy as np
 import torch
 from torch import nn
 
-from agent import Agent, load_and_run, train_save_run
-from utils import ValueNet, get_device, get_num_states_actions_continuous, vis_episodes
+from agent import Agent
+from utils import get_device
 
 
 # Actions are sampled from a multinomial distribution
@@ -74,8 +73,8 @@ class PPOContinuousPolicyNet(nn.Module):
 class PPO(Agent):
   def __init__(self, env, policy_net, value_net, device=get_device(), save_file="./data/ppo"):
     super().__init__(env, device)
-    self.policy_net = policy_net
-    self.value_net = value_net
+    self.policy_net = policy_net.to(device)
+    self.value_net = value_net.to(device)
     self.save_file = save_file
 
     # Hyperparameters
@@ -155,7 +154,7 @@ class PPO(Agent):
 
     return advantages
 
-  def collect_buffer(self):  
+  def collect_buffer(self):
     buffer = []
     while len(buffer) < self.buffer_size:
       done = False
@@ -169,7 +168,7 @@ class PPO(Agent):
       rewards = []
       p_actions = []
       values = []
-      
+
       while not done:
         t += 1
         p_action, action = self.policy_net.sample_action(state.reshape(-1))
@@ -210,7 +209,9 @@ class PPO(Agent):
       mean_rewards = np.mean(self.batch_rewards)
       episode_lens.append(mean_episode_len)
       rewards.append(mean_rewards)
-      print(f"Training epoch {epoch}. Lasted on average {mean_episode_len}. Reward per run was on average {mean_rewards}.")
+      print(
+        f"Training epoch {epoch}. Lasted on average {mean_episode_len}. Reward per run was on average {mean_rewards}."
+      )
 
       if mean_rewards >= best_reward + 10 and mean_rewards >= 50:
         best_reward = mean_rewards
@@ -219,20 +220,5 @@ class PPO(Agent):
 
       self.batch_episode_lens = []
       self.batch_rewards = []
-    
+
     return rewards
-
-
-if __name__ == "__main__":
-  # device = get_device()
-  device = torch.device("cpu")
-  mode = None
-  env = gym.make("BipedalWalker-v3", render_mode=mode)
-  num_states, num_actions = get_num_states_actions_continuous(env)
-
-  policy_net = PPOContinuousPolicyNet(num_states, num_actions).to(device=device)
-  value_net = ValueNet(num_states).to(device=device)
-  r = PPO(env, policy_net, value_net, device=device, save_file='./data/ppo-bipedal')
-  # load_and_run(r)
-  episode_lens = train_save_run(r)
-  vis_episodes(episode_lens, "./data/ppo-bipedal")

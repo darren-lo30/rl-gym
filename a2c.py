@@ -1,15 +1,11 @@
 import torch
-from torch import nn
-import gym
-from utils import *
-from agent import *
+from agent import Agent
 from itertools import count
 import numpy as np
 
 class ActorCritic(Agent):
-  def __init__(self, env, device, actor_net, critic_net, save_file = './data/a2c'):
+  def __init__(self, env, device, actor_net, critic_net):
     super().__init__(env, device)
-    self.save_file = save_file
     # Hyperparameters
     actor_lr = 1e-4
     critic_lr = 1e-4
@@ -106,26 +102,13 @@ class ActorCritic(Agent):
     
     return episode_lens
   
-  def save(self):
+  def save(self, file):
     torch.save({
       'actor': self.actor_net.state_dict(),
       'critic': self.critic_net.state_dict()
-    }, self.save_file)
+    }, file)
 
-  def load(self):
-    data = torch.load(self.save_file)
+  def load(self, file):
+    data = torch.load(file)
     self.actor_net.load_state_dict(data['actor'])
     self.critic_net.load_state_dict(data['critic'])
-
-    
-if __name__ == "__main__":
-  device = get_device()
-  env = gym.make("CartPole-v1")
-  # Reinforce with baseline loss
-  num_states, num_actions = get_num_states_actions_discrete(env)
-
-  actor_net = PolicyNet(num_states, num_actions).to(device=device)
-  critic_net = ValueNet(num_states).to(device=device)
-  r = ActorCritic(env, device, actor_net=actor_net, critic_net=critic_net)
-  episode_lens = train_save_run(r)
-  vis_episodes(episode_lens, './data/a2c')

@@ -1,10 +1,9 @@
 import torch
 from torch import nn
-import gym
-from utils import *
-from agent import *
 from itertools import count
 import numpy as np
+
+from agent import Agent
 
 class PolicyNet(nn.Module): 
   def __init__(self, num_states, num_actions):
@@ -34,9 +33,8 @@ class BaselineNet(nn.Module):
 
 # Reinforce with baseline loss
 class ReinforceBaseline(Agent):
-  def __init__(self, env, device, policy_net, baseline_net, save_file = './data/reinforce_baseline'):
+  def __init__(self, env, device, policy_net, baseline_net):
     super().__init__(env, device)
-    self.save_file = save_file
   
     # Hyperparameters
     policy_lr = 1e-4
@@ -125,27 +123,15 @@ class ReinforceBaseline(Agent):
     
     return episode_lens
   
-  def save(self):
+  def save(self, file):
     torch.save({
       'policy': self.policy_net.state_dict(),
       'baseline': self.baseline_net.state_dict()
-    }, self.save_file)
+    }, file)
 
-  def load(self):
-    data = torch.load(self.save_file)
+  def load(self, file):
+    data = torch.load(file)
     self.policy_net.load_state_dict(data['policy'])
     self.baseline_net.load_state_dict(data['baseline'])
 
-    
-if __name__ == "__main__":
-  device = get_device()
-  env = gym.make("CartPole-v1")
-  # Reinforce with baseline loss
-  num_states, num_actions = get_num_states_actions_discrete(env)
-
-  policy_net = PolicyNet(num_states, num_actions)
-  baseline_net = BaselineNet(num_states)
-
-  r = ReinforceBaseline(env, device, policy_net, baseline_net, save_file='./data/reinforce_baseline_acrobot')
-  episode_lens = train_save_run(r)
-  vis_episodes(episode_lens, './data/reinforce_baseline')
+  

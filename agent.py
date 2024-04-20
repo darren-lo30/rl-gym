@@ -1,6 +1,4 @@
-import gym
 import torch
-from utils import get_device
 import time
 
 # A base class for RL agents
@@ -19,11 +17,11 @@ class Agent():
     raise NotImplementedError()
 
   # Save the agent's model to a file
-  def save(self):
+  def save(self, file):
     raise NotImplementedError()
 
   # Load the agent's model from a file
-  def load(self):
+  def load(self, file):
     raise NotImplementedError()
   
   def env_step(self, action):
@@ -54,21 +52,3 @@ def run(agent):
     time.sleep(0.01)
 
   env.close()
-
-# Train, save then run an agent
-  
-def train_run(agent):
-  hist = agent.train()
-  run(agent)
-  return hist
-
-def train_save_run(agent):
-  hist = agent.train()
-  agent.save()
-  run(agent)
-  return hist
-
-# Load and run an agent
-def load_and_run(agent):
-  agent.load()
-  run(agent)

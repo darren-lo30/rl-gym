@@ -1,14 +1,13 @@
-import gym
 import copy
 import random
 
 from itertools import count
 import torch
 import torch.nn as nn
-from utils import *
 import numpy as np
-from agent import *
 from collections import deque
+
+from agent import Agent
 
 
 class DQNNet(nn.Module): 
@@ -147,18 +146,8 @@ class DQN(Agent):
           episode_lens.append(t)
           break
 
-  def save(self):
-    torch.save(self.Q_model.state_dict(), './data/dqn')
+  def save(self, file):
+    torch.save(self.Q_model.state_dict(), file)
   
-  def load(self):
-    self.Q_model.load_state_dict(torch.load('./data/dqn'))
-
-
-if __name__ == "__main__":
-  env = gym.make("CartPole-v1")
-  num_states, num_actions = get_num_states_actions_discrete(env)
-
-  Q_model = DQNNet(num_states, num_actions)
-  agent = DQN(env, get_device(), Q_model)
-
-  train_save_run(agent)
+  def load(self, file):
+    self.Q_model.load_state_dict(torch.load(file))
