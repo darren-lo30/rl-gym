@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from agent import Agent, load_and_run, train_save_run
-from utils import ValueNet, get_device, get_num_states_actions_continuous
+from utils import ValueNet, get_device, get_num_states_actions_continuous, vis_episodes
 
 
 # Actions are sampled from a multinomial distribution
@@ -82,12 +82,12 @@ class PPO(Agent):
     lr = 0.0003
     self.clip_epsilon = 0.2
     self.gamma = 0.99
-    self.num_train_epochs = 500
-    self.num_optim_epochs = 4
-    self.buffer_size = 2000
-    self.batch_size = 50
+    self.num_train_epochs = 800
+    self.num_optim_epochs = 7
+    self.buffer_size = 2048
+    self.batch_size = 64
     self.gae_lambda = 0.95
-    self.advantage_coef = 0.5
+    self.advantage_coef = 2.5
     self.entropy_coef = 0
     self.optim = torch.optim.Adam(chain(policy_net.parameters(), value_net.parameters()), lr)
     self.batch_episode_lens = []
@@ -218,18 +218,21 @@ class PPO(Agent):
         self.save()
 
       self.batch_episode_lens = []
-      self.mean_rewards = []
+      self.batch_rewards = []
+    
+    return rewards
 
 
 if __name__ == "__main__":
-  device = get_device()
-  mode = 'human'
+  # device = get_device()
+  device = torch.device("cpu")
+  mode = None
   env = gym.make("BipedalWalker-v3", render_mode=mode)
   num_states, num_actions = get_num_states_actions_continuous(env)
 
   policy_net = PPOContinuousPolicyNet(num_states, num_actions).to(device=device)
   value_net = ValueNet(num_states).to(device=device)
-  r = PPO(env, policy_net, value_net)
-  load_and_run(r)
-  # episode_lens = train_save_run(r)
-  # vis_episodes(episode_lens, "./data/ppo")
+  r = PPO(env, policy_net, value_net, device=device, save_file='./data/ppo-bipedal')
+  # load_and_run(r)
+  episode_lens = train_save_run(r)
+  vis_episodes(episode_lens, "./data/ppo-bipedal")

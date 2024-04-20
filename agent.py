@@ -44,7 +44,7 @@ def run(agent):
   state, _ = env.reset()
   done = False
   while not done:
-    state = torch.tensor(state, device=get_device())
+    state = torch.tensor(state, device=agent.device)
     with torch.no_grad():
       action = agent.act(state)
     state, _, terminated, truncated, _ = env.step(action)
