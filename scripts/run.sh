@@ -1,0 +1,1 @@
+python3 ./src/main.py --env "BipedalWalker-v3" --model "ppo" train --config ./models/bipedal/params.json

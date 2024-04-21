@@ -1,0 +1,6 @@
+{
+  "actor_lr": 1e-4,
+  "critic_lr": 1e-4,
+  "gamma": 0.99,
+  "num_episodes": 1000
+}

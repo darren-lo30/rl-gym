@@ -71,24 +71,12 @@ class PPOContinuousPolicyNet(nn.Module):
 
 
 class PPO(Agent):
-  def __init__(self, env, policy_net, value_net, device=get_device(), save_file="./data/ppo"):
-    super().__init__(env, device)
+  def __init__(self, config, env, policy_net, value_net, device=get_device()):
+    super().__init__(config, env, device)
     self.policy_net = policy_net.to(device)
     self.value_net = value_net.to(device)
-    self.save_file = save_file
 
-    # Hyperparameters
-    lr = 0.0003
-    self.clip_epsilon = 0.2
-    self.gamma = 0.99
-    self.num_train_epochs = 800
-    self.num_optim_epochs = 7
-    self.buffer_size = 2048
-    self.batch_size = 64
-    self.gae_lambda = 0.95
-    self.advantage_coef = 2.5
-    self.entropy_coef = 0
-    self.optim = torch.optim.Adam(chain(policy_net.parameters(), value_net.parameters()), lr)
+    self.optim = torch.optim.Adam(chain(policy_net.parameters(), value_net.parameters()), self.config.lr)
     self.batch_episode_lens = []
     self.batch_rewards = []
 
@@ -96,22 +84,22 @@ class PPO(Agent):
     _, action = self.policy_net.sample_action(state)
     return action.cpu()
 
-  def save(self):
+  def save(self, save_file):
     torch.save(
-      {"policy": self.policy_net.state_dict(), "value": self.value_net.state_dict()}, self.save_file
+      {"policy": self.policy_net.state_dict(), "value": self.value_net.state_dict()}, save_file
     )
 
-  def load(self):
-    data = torch.load(self.save_file)
+  def load(self, save_file):
+    data = torch.load(save_file)
     self.policy_net.load_state_dict(data["policy"])
     self.value_net.load_state_dict(data["value"])
 
   def optim_steps(self, buffer):
     states_dataloader = torch.utils.data.DataLoader(
-      buffer, batch_size=self.batch_size, shuffle=True
+      buffer, batch_size=self.config.batch_size, shuffle=True
     )
 
-    for _ in range(self.num_optim_epochs):
+    for _ in range(self.config.num_optim_epochs):
       for batch in states_dataloader:
         states, actions, p_actions, advantages, values = batch
         # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-10)
@@ -121,7 +109,7 @@ class PPO(Agent):
         ratio = new_p_actions.exp() / p_actions.exp()
 
         unclipped_objective = ratio * advantages
-        clipped_ratio = torch.clip(ratio, 1 - self.clip_epsilon, 1 + self.clip_epsilon)
+        clipped_ratio = torch.clip(ratio, 1 - self.config.clip_epsilon, 1 + self.config.clip_epsilon)
 
         clipped_objective = clipped_ratio * advantages
 
@@ -134,7 +122,7 @@ class PPO(Agent):
           torch.squeeze(new_values), returns, reduction="none"
         )
 
-        loss = -actor_objective + self.advantage_coef * value_loss
+        loss = -actor_objective + self.config.advantage_coef * value_loss
 
         self.optim.zero_grad()
         nn.utils.clip_grad_norm_(self.policy_net.parameters(), 2)
@@ -149,14 +137,14 @@ class PPO(Agent):
 
     for t in reversed(range(T)):
       next_value = 0 if t + 1 >= T else values[t + 1]
-      delta_t = rewards[t] + self.gamma * next_value - values[t]
-      advantages[t] = delta_t + self.gae_lambda * self.gamma * advantages[t + 1]
+      delta_t = rewards[t] + self.config.gamma * next_value - values[t]
+      advantages[t] = delta_t + self.config.gae_lambda * self.config.gamma * advantages[t + 1]
 
     return advantages
 
   def collect_buffer(self):
     buffer = []
-    while len(buffer) < self.buffer_size:
+    while len(buffer) < self.config.buffer_size:
       done = False
       state, _ = self.env.reset()
       state = torch.tensor(state, device=self.device)
@@ -198,9 +186,9 @@ class PPO(Agent):
     episode_lens = []
     rewards = []
 
-    best_reward = -100000
+    # best_reward = -100000
 
-    for epoch in range(self.num_train_epochs):
+    for epoch in range(self.config.num_train_epochs):
       buffer = self.collect_buffer()
       self.optim_steps(buffer)
 
@@ -213,10 +201,10 @@ class PPO(Agent):
         f"Training epoch {epoch}. Lasted on average {mean_episode_len}. Reward per run was on average {mean_rewards}."
       )
 
-      if mean_rewards >= best_reward + 10 and mean_rewards >= 50:
-        best_reward = mean_rewards
-        print("Saving model...")
-        self.save()
+      # if mean_rewards >= best_reward + 10 and mean_rewards >= 50:
+      #   best_reward = mean_rewards
+      #   print("Saving model...")
+      #   self.save()
 
       self.batch_episode_lens = []
       self.batch_rewards = []

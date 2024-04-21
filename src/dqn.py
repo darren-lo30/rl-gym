@@ -23,21 +23,12 @@ class DQNNet(nn.Module):
     return self.net(s)
 
 class DQN(Agent): 
-  def __init__(self, env, device, Q_model):
+  def __init__(self, config, env, device, Q_model):
     self.env = env
 
     # Hyperparameters
-    self.eps_start = 0.9
-    self.eps_end = 0.05
-    self.eps_decay = 1000
-
-    self.batch_size = 256
-    self.target_update_freq = 100
-    self.gamma = 0.99
-    self.replay_memory = deque(maxlen=10_000)
-    self.lr = 1e-4
-    self.num_episodes = 1000
-
+    self.config = config
+    self.replay_memory = deque(maxlen=self.config.memory_len)
     self.num_action = 0
 
     # Initialize target model and Q model
@@ -46,14 +37,14 @@ class DQN(Agent):
     self.target = copy.deepcopy(self.Q_model).to(device)
     self.target.load_state_dict(self.Q_model.state_dict())
 
-    self.optim = torch.optim.AdamW(self.Q_model.parameters(), self.lr, amsgrad=True)
+    self.optim = torch.optim.AdamW(self.Q_model.parameters(), self.config.lr, amsgrad=True)
     self.device = device
 
   def update_target(self):
     self.target.load_state_dict(self.Q_model.state_dict())
 
   def get_eps(self):
-    return self.eps_end + (self.eps_start - self.eps_end) * np.exp(-1 * self.num_action / self.eps_decay)
+    return self.config.eps_end + (self.config.eps_start - self.config.eps_end) * np.exp(-1 * self.num_action / self.config.eps_decay)
 
   def act(self, state):
     return self.Q_model(state).argmax(dim = 1).item()
@@ -73,10 +64,10 @@ class DQN(Agent):
       return torch.tensor([self.env.action_space.sample()], device=self.device)
 
   def optim_Q(self):
-    if len(self.replay_memory) < self.batch_size:
+    if len(self.replay_memory) < self.config.batch_size:
       return
     
-    batch = random.sample(self.replay_memory, self.batch_size)
+    batch = random.sample(self.replay_memory, self.config.batch_size)
     split_batch = [*zip(*batch)]
     state = torch.stack(list(split_batch[0]))
     action = torch.stack(list(split_batch[1]))
@@ -92,7 +83,7 @@ class DQN(Agent):
     target_state_action = torch.zeros((state.shape[0], 1), dtype=torch.float32, device=self.device)
     with torch.no_grad():
       target_state_action[non_final_mask] = self.target(non_final_next_state).max(1).values.view(-1, 1)
-    target_state_action_sum = self.gamma * target_state_action + reward
+    target_state_action_sum = self.config.gamma * target_state_action + reward
 
     loss = nn.functional.smooth_l1_loss(curr_state_action, target_state_action_sum, reduction='mean')
     self.optim.zero_grad()
@@ -103,18 +94,18 @@ class DQN(Agent):
     
   def train(self):
     episode_lens = []
-    for episode in range(self.num_episodes):
+    for episode in range(self.config.num_episodes):
       if episode % 10 == 0: 
         print(f"Training episode {episode}")
         print(f"Episode takes on average {np.mean(episode_lens[-10:])} steps")
 
-      state = self.env.reset()
+      state, _ = self.env.reset()
       state = torch.tensor(state).to(self.device)
 
       done = False
       for t in count():
         action = self.get_action(state)
-        observation, reward, terminated, truncated = self.env.step(action.item())
+        observation, reward, terminated, truncated, _ = self.env.step(action.item())
 
         done = terminated or truncated
 
@@ -130,7 +121,7 @@ class DQN(Agent):
 
         # Hard updates scheme, not good
         # Update target to Q
-        # if self.num_action % self.target_update_freq == 0:
+        # if self.num_action % self.config.target_update_freq == 0:
         #   print("HARD UPDATE")
         #   self.update_target()
 

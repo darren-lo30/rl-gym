@@ -1,52 +1,20 @@
 import torch
-from torch import nn
 from itertools import count
 import numpy as np
 
 from agent import Agent
 
-class PolicyNet(nn.Module): 
-  def __init__(self, num_states, num_actions):
-    super(PolicyNet, self).__init__()
-    self.net = torch.nn.Sequential(
-      torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(), 
-      torch.nn.Linear(128, num_actions), torch.nn.Softmax(dim=0)
-    )
-
-  def forward(self, s):
-    return self.net(s)
-
-class BaselineNet(nn.Module):
-  def __init__(self, num_states):
-    super(BaselineNet, self).__init__() 
-    self.net = torch.nn.Sequential(
-      torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(), 
-      torch.nn.Linear(128, 1)
-    )
-  
-  def forward(self, s):
-    return self.net(s)
-
 # Reinforce with baseline loss
 class ReinforceBaseline(Agent):
-  def __init__(self, env, device, policy_net, baseline_net):
-    super().__init__(env, device)
-  
-    # Hyperparameters
-    policy_lr = 1e-4
-    baseline_lr = 1e-4
-    self.gamma = 0.99
-    self.num_episodes = 1000
+  def __init__(self, config, env, device, policy_net, baseline_net):
+    super().__init__(config, env, device)
+
     
     # Policy model
     self.policy_net = policy_net.to(device=device)
     self.baseline_net = baseline_net.to(device=device)
-    self.policy_optim = torch.optim.AdamW(self.policy_net.parameters(), lr=policy_lr, amsgrad=True)
-    self.baseline_optim = torch.optim.AdamW(self.baseline_net.parameters(), lr=baseline_lr, amsgrad=True)
+    self.policy_optim = torch.optim.AdamW(self.policy_net.parameters(), lr=self.config.policy_lr, amsgrad=True)
+    self.baseline_optim = torch.optim.AdamW(self.baseline_net.parameters(), lr=self.config.baseline_lr, amsgrad=True)
 
   def policy_update(self, p_actions, G, baselines):
     # Update baseline
@@ -80,15 +48,15 @@ class ReinforceBaseline(Agent):
     return action.item()
   
   def compute_G(self, rewards):
-    pows = torch.pow(self.gamma, torch.arange(0, rewards.shape[0], device=self.device))
+    pows = torch.pow(self.config.gamma, torch.arange(0, rewards.shape[0], device=self.device))
     # If you remove / pows, this will match Sutton & Barto's formulation where each gradient is multiplied by gamma^t 
     G = torch.flip(torch.cumsum(torch.flip(rewards * pows, dims = [0]), dim = 0), dims = [0]) / pows
     return G
 
   def train(self):
     episode_lens = []
-    for episode in range(self.num_episodes):
-      state = self.env.reset()
+    for episode in range(self.config.num_episodes):
+      state, _ = self.env.reset()
       state = torch.tensor(state, device=self.device)
         
       rewards = []

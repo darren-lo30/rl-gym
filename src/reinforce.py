@@ -1,34 +1,15 @@
 import torch
-from torch import nn
 from itertools import count
 import numpy as np
 import agent
 
-class ReinforceNet(nn.Module): 
-  def __init__(self, num_states, num_actions):
-    super(ReinforceNet, self).__init__()
-    self.net = torch.nn.Sequential(
-      torch.nn.Linear(num_states, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(),
-      torch.nn.Linear(128, 128), torch.nn.ReLU(), 
-      torch.nn.Linear(128, num_actions), torch.nn.Softmax(dim=0)
-    )
-
-  def forward(self, s):
-    return self.net(s)
-
 class Reinforce(agent.Agent):
-  def __init__(self, env, device, policy_net):
-    super().__init__(env, device)
+  def __init__(self, config, env, device, policy_net):
+    super().__init__(config, env, device)
   
-    # Hyperparameters
-    lr = 1e-4
-    self.gamma = 0.99
-    self.num_episodes = 1000
-
     # Policy model
     self.policy_net = policy_net.to(device)
-    self.optim = torch.optim.AdamW(self.policy_net.parameters(), lr=lr, amsgrad=True)
+    self.optim = torch.optim.AdamW(self.policy_net.parameters(), lr=self.config.lr, amsgrad=True)
 
   def policy_update(self, p_actions, G):
     # We want to maximize the P * R, so minimize -P * R
@@ -52,14 +33,14 @@ class Reinforce(agent.Agent):
     return action.item()
   
   def compute_G(self, rewards):
-    pows = torch.pow(self.gamma, torch.arange(0, rewards.shape[0], device=self.device))
+    pows = torch.pow(self.config.gamma, torch.arange(0, rewards.shape[0], device=self.device))
     G = torch.flip(torch.cumsum(torch.flip(rewards * pows, dims = [0]), dim = 0), dims = [0]) / pows
     return G
 
   def train(self):
     episode_lens = []
-    for episode in range(self.num_episodes):
-      state = self.env.reset()
+    for episode in range(self.config.num_episodes):
+      state, _ = self.env.reset()
       state = torch.tensor(state, device=self.device)
         
       rewards = []
@@ -79,6 +60,7 @@ class Reinforce(agent.Agent):
           episode_lens.append(t)
           break
       p_actions = torch.cat(p_actions)
+      rewards = torch.cat(rewards)
       G = self.compute_G(rewards)
       # Update policy gradient  
       self.policy_update(p_actions, G)

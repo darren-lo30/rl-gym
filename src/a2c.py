@@ -4,20 +4,15 @@ from itertools import count
 import numpy as np
 
 class ActorCritic(Agent):
-  def __init__(self, env, device, actor_net, critic_net):
-    super().__init__(env, device)
-    # Hyperparameters
-    actor_lr = 1e-4
-    critic_lr = 1e-4
+  def __init__(self, config, env, device, actor_net, critic_net):
+    super().__init__(config, env, device)
 
-    self.gamma = 0.99
-    self.num_episodes = 1000
-
+    self.config = config
     # Policy model
-    self.actor_net = actor_net
-    self.critic_net = critic_net
-    self.actor_optim = torch.optim.AdamW(self.actor_net.parameters(), lr=actor_lr, amsgrad=True)
-    self.critic_optim = torch.optim.AdamW(self.critic_net.parameters(), lr=critic_lr, amsgrad=True)
+    self.actor_net = actor_net.to(device)
+    self.critic_net = critic_net.to(device)
+    self.actor_optim = torch.optim.AdamW(self.actor_net.parameters(), lr=self.config.actor_lr, amsgrad=True)
+    self.critic_optim = torch.optim.AdamW(self.critic_net.parameters(), lr=self.config.critic_lr, amsgrad=True)
     
 
   def policy_update(self, p_actions, advantages, advantages_loss):
@@ -60,15 +55,15 @@ class ActorCritic(Agent):
     else:
       v_next = self.critic_net(next_state)
     
-    target = reward + self.gamma * v_next
+    target = reward + self.config.gamma * v_next
     advantage = target - v_curr
     loss = torch.nn.functional.mse_loss(target, v_curr).view(1)
     return advantage.detach(), loss
 
   def train(self):
     episode_lens = []
-    for episode in range(self.num_episodes):
-      state = self.env.reset()
+    for episode in range(self.config.num_episodes):
+      state, _ = self.env.reset()
       state = torch.tensor(state, device=self.device)
         
       p_actions = []

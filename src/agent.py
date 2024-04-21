@@ -3,7 +3,8 @@ import time
 
 # A base class for RL agents
 class Agent():
-  def __init__(self, env, device):
+  def __init__(self, config, env, device):
+    self.config = config
     self.env = env
     self.device = device
   
@@ -25,7 +26,7 @@ class Agent():
     raise NotImplementedError()
   
   def env_step(self, action):
-    if torch.is_tensor(action) and torch.squeeze(action).shape[0] == 1:
+    if torch.is_tensor(action) and torch.numel(action) == 1:
       action = action.item()
 
     next_state, reward, terminated, truncated, _ = self.env.step(action)

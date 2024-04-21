@@ -5,10 +5,10 @@ import torch
 
 from agent import run
 from model_loader import get_model, get_model_names
-from ppo import PPO
 from utils import get_device
+import json
 
-
+from types import SimpleNamespace
 
 def run_load(load_args, device):
   env = gym.make(load_args.env, render_mode='human')
@@ -17,8 +17,10 @@ def run_load(load_args, device):
   run(agent)
 
 def run_train(train_args, device):
+  with open(train_args.config, 'r') as f:
+    config = json.load(f, object_hook=lambda d: SimpleNamespace(**d))
   env = gym.make(train_args.env, render_mode=None)
-  agent = get_model(train_args.model, env, device)
+  agent = get_model(train_args.model, config, env, device)
 
   agent.train()
   agent.save(train_args.save_file)
@@ -28,10 +30,12 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser(prog="RL-Gym", description="Implementation of RL Gym Algorithms")
   parser.add_argument("--env", type=str, required=True)
   parser.add_argument("--device", choices=['cpu', 'default'], default='default')
-  parser.add_argument("--model", choices=get_model_names())
-  subparsers = parser.add_subparsers(help="mode", dest="cmd")
+  parser.add_argument("--model", choices=get_model_names(), required=True)
+
+  subparsers = parser.add_subparsers(help="mode", dest="cmd", required=True)
 
   train_parser = subparsers.add_parser("train")  
+  train_parser.add_argument("--config", type=str, required=True)
   train_parser.add_argument("--save_file", type=str)
 
   load_parser = subparsers.add_parser("load")
